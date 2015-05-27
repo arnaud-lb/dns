@@ -124,6 +124,30 @@ class RetryExecutorTest extends \PHPUnit_Framework_TestCase
         $retryExecutor->query('8.8.8.8', $query)->then($callback, $errorback);
     }
 
+    /**
+     * @test
+     * @expectedException Exception
+     * @expectedExceptionMessage query failed
+     */
+    public function queryDoesNotHideErrors()
+    {
+        $executor = $this->createExecutorMock();
+        $executor
+            ->expects($this->once())
+            ->method('query')
+            ->with('8.8.8.8', $this->isInstanceOf('React\Dns\Query\Query'))
+            ->will($this->returnCallback(function ($domain, $query) {
+                return Promise\reject(new \Exception('query failed'));
+            }));
+
+        $retryExecutor = new RetryExecutor($executor, 2);
+
+        $query = new Query('igor.io', Message::TYPE_A, Message::CLASS_IN, 1345656451);
+        $retryExecutor
+            ->query('8.8.8.8', $query)
+            ->done();
+    }
+
     protected function expectCallableOnce()
     {
         $mock = $this->createCallableMock();
@@ -149,7 +173,7 @@ class RetryExecutorTest extends \PHPUnit_Framework_TestCase
         $mock = $this->createPromiseMock();
         $mock
             ->expects($this->once())
-            ->method('then')
+            ->method('done')
             ->will($this->returnValue($return));
 
         return $mock;
@@ -167,7 +191,7 @@ class RetryExecutorTest extends \PHPUnit_Framework_TestCase
 
     protected function createPromiseMock()
     {
-        return $this->getMock('React\Promise\PromiseInterface');
+        return $this->getMock('React\Promise\ExtendedPromiseInterface');
     }
 
     protected function createStandardResponse()
